@@ -57,3 +57,23 @@ export async function searchOSM(query: string, lat?: number, lon?: number) {
     return { error: "Failed to fetch OpenStreetMap data." };
   }
 }
+
+export async function fetchProcedureImage(query: string) {
+  try {
+    const url = `https://en.wikipedia.org/w/api.php?action=query&format=json&prop=pageimages&generator=search&gsrsearch=${encodeURIComponent(query)}&gsrlimit=3&pithumbsize=800&origin=*`;
+    const res = await fetch(url);
+    const data = await res.json();
+    if (!data.query || !data.query.pages) return { error: "No images found." };
+    
+    const pages = Object.values(data.query.pages) as any[];
+    const images = pages.filter(p => p.thumbnail).map(p => ({
+      title: p.title,
+      url: p.thumbnail.source
+    }));
+    
+    if (images.length === 0) return { error: "No images found." };
+    return { images };
+  } catch (e) {
+    return { error: "Failed to fetch images." };
+  }
+}

@@ -1,6 +1,6 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { Language, Message, PatientDemographics } from "../types";
-import { searchOpenFDA, searchPubMed, searchOSM } from "./apiServices";
+import { searchOpenFDA, searchPubMed, searchOSM, fetchProcedureImage } from "./apiServices";
 
 const TRANSLATIONS: Record<Language, any> = {
   en: {
@@ -51,10 +51,13 @@ If the user asks for an insurance justification letter, generate a formal, profe
 If the user asks about Ayushman Bharat supported procedures and their tentative pricing for Interventional Radiology, use the googleSearch tool to find the latest information from the Karnataka SAST Arogya portal or other official sources.
 If the user asks to find nearby Interventional Radiology providers or services, use the googleMaps tool to search for them based on their location.
 
+If the user asks for an image, diagram, or visual of a procedure, use the fetchProcedureImage tool to get image URLs. You MUST embed the returned image URLs in your response using Markdown image syntax: ![Title](URL).
+
 You have access to additional free tools:
 - searchOpenFDA: Use this to check for drug warnings, side effects, or bleeding risks if the user mentions specific medications.
 - searchPubMed: Use this to find recent medical research articles or abstracts if the user asks about the success rate or recent advancements of a procedure.
-- searchOSM: Use this as an alternative to find nearby hospitals or clinics if needed.`;
+- searchOSM: Use this as an alternative to find nearby hospitals or clinics if needed.
+- fetchProcedureImage: Fetch medical diagrams or images of a procedure from Wikipedia.`;
 
     // Format messages for Gemini
     const formattedContents = messages.map(msg => {
@@ -107,6 +110,11 @@ You have access to additional free tools:
               name: 'searchOSM',
               description: 'Search OpenStreetMap for nearby hospitals or clinics.',
               parameters: { type: Type.OBJECT, properties: { query: { type: Type.STRING } }, required: ['query'] }
+            },
+            {
+              name: 'fetchProcedureImage',
+              description: 'Fetch medical diagrams or images of a procedure from Wikipedia.',
+              parameters: { type: Type.OBJECT, properties: { query: { type: Type.STRING } }, required: ['query'] }
             }
           ]
         }
@@ -141,6 +149,9 @@ You have access to additional free tools:
           functionResponses.push({ name: call.name, response: result });
         } else if (call.name === 'searchOSM') {
           const result = await searchOSM(call.args.query, demographics?.latLng?.latitude, demographics?.latLng?.longitude);
+          functionResponses.push({ name: call.name, response: result });
+        } else if (call.name === 'fetchProcedureImage') {
+          const result = await fetchProcedureImage(call.args.query);
           functionResponses.push({ name: call.name, response: result });
         }
       }

@@ -201,16 +201,16 @@ export const ChatInterface: React.FC = () => {
   return (
     <div className="flex flex-col h-screen max-w-4xl mx-auto bg-white shadow-2xl overflow-hidden">
       {/* Header */}
-      <header className="bg-slate-900 text-white p-4 flex justify-between items-center">
+      <header className="bg-white border-b border-slate-200 text-slate-800 p-4 flex justify-between items-center z-10">
         <div className="flex items-center gap-3">
-          <div className="bg-emerald-500 p-2 rounded-lg">
+          <div className="bg-sky-50 text-sky-600 p-2 rounded-xl">
             <Bot size={24} />
           </div>
           <div>
-            <h1 className="font-bold text-lg leading-tight">IR Patient Guide</h1>
+            <h1 className="font-semibold text-lg leading-tight text-slate-800">IR Patient Guide</h1>
             <div className="flex items-center gap-2">
-              <p className="text-xs text-slate-400">AI Medical Assistant</p>
-              <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded border border-emerald-500/30 font-medium">Patient Friendly</span>
+              <p className="text-xs text-slate-500">AI Medical Assistant</p>
+              <span className="text-[10px] bg-sky-50 text-sky-600 px-1.5 py-0.5 rounded-md font-medium">Patient Friendly</span>
             </div>
           </div>
         </div>
@@ -220,7 +220,7 @@ export const ChatInterface: React.FC = () => {
             <>
               <button
                 onClick={emailTranscript}
-                className="text-xs text-slate-400 hover:text-emerald-400 transition-colors flex items-center gap-1"
+                className="text-xs text-slate-500 hover:text-sky-600 transition-colors flex items-center gap-1"
                 title="Email Transcript"
               >
                 <Mail size={14} />
@@ -231,7 +231,7 @@ export const ChatInterface: React.FC = () => {
                   setMessages([]);
                   tts.stop();
                 }}
-                className="text-xs text-slate-400 hover:text-white transition-colors"
+                className="text-xs text-slate-500 hover:text-slate-800 transition-colors"
                 title="Clear Chat"
               >
                 Clear Chat
@@ -242,7 +242,7 @@ export const ChatInterface: React.FC = () => {
             onClick={() => setShowProfile(!showProfile)}
             className={cn(
               "p-2 rounded-lg transition-colors",
-              showProfile ? "bg-emerald-500 text-white" : "bg-slate-800 text-slate-400 hover:text-white"
+              showProfile ? "bg-sky-600 text-white" : "bg-slate-100 text-slate-500 hover:text-slate-800"
             )}
             title="Patient Profile"
           >
@@ -251,7 +251,7 @@ export const ChatInterface: React.FC = () => {
           <select
             value={language}
             onChange={(e) => setLanguage(e.target.value as Language)}
-            className="bg-slate-800 text-sm border-none rounded px-2 py-1 focus:ring-2 focus:ring-emerald-500"
+            className="bg-slate-100 text-slate-700 text-sm border-none rounded px-2 py-1 focus:ring-2 focus:ring-sky-500"
           >
             {languages.map(lang => (
               <option key={lang.code} value={lang.code}>{lang.name}</option>
@@ -287,16 +287,16 @@ export const ChatInterface: React.FC = () => {
                 <button
                   key={suggestion}
                   onClick={() => handleSend(suggestion)}
-                  className="text-left p-3 text-sm bg-white border border-slate-200 rounded-xl hover:border-emerald-500 hover:bg-emerald-50 transition-all"
+                  className="text-left p-3 text-sm bg-white border border-slate-200 rounded-xl hover:border-sky-500 hover:bg-sky-50 transition-all shadow-sm"
                 >
                   {suggestion}
                 </button>
               ))}
               <button
                 onClick={generateInsuranceJustification}
-                className="text-left p-3 text-sm bg-emerald-50 border border-emerald-100 rounded-xl hover:border-emerald-500 hover:bg-emerald-100 transition-all flex items-center gap-2 group"
+                className="text-left p-3 text-sm bg-sky-50 border border-sky-100 rounded-xl hover:border-sky-500 hover:bg-sky-100 transition-all flex items-center gap-2 group shadow-sm"
               >
-                <ShieldCheck size={16} className="text-emerald-600 group-hover:scale-110 transition-transform" />
+                <ShieldCheck size={16} className="text-sky-600 group-hover:scale-110 transition-transform" />
                 <span>Insurance Justification</span>
               </button>
             </div>
@@ -316,14 +316,14 @@ export const ChatInterface: React.FC = () => {
             >
               <div className={cn(
                 "w-8 h-8 rounded-full flex items-center justify-center shrink-0",
-                msg.role === 'user' ? "bg-emerald-100 text-emerald-600" : "bg-slate-200 text-slate-600"
+                msg.role === 'user' ? "bg-sky-100 text-sky-600" : "bg-slate-200 text-slate-600"
               )}>
                 {msg.role === 'user' ? <User size={16} /> : <Bot size={16} />}
               </div>
               <div className={cn(
                 "p-4 rounded-2xl text-sm leading-relaxed shadow-sm relative group",
                 msg.role === 'user' 
-                  ? "bg-emerald-600 text-white rounded-tr-none" 
+                  ? "bg-sky-600 text-white rounded-tr-none" 
                   : "bg-white text-slate-800 border border-slate-100 rounded-tl-none"
               )}>
                 {msg.attachments && msg.attachments.length > 0 && (
@@ -336,11 +336,11 @@ export const ChatInterface: React.FC = () => {
                     ))}
                   </div>
                 )}
-                <div className="prose prose-sm max-w-none prose-p:leading-relaxed prose-pre:bg-slate-800 prose-pre:text-slate-100">
+                <div className="prose prose-sm max-w-none prose-p:leading-relaxed prose-pre:bg-slate-800 prose-pre:text-slate-100 prose-img:rounded-xl prose-img:shadow-md prose-img:w-full">
                   <Markdown
                     components={{
                       a: ({ node, ...props }) => (
-                        <a target="_blank" rel="noopener noreferrer" className="text-emerald-600 hover:underline" {...props} />
+                        <a target="_blank" rel="noopener noreferrer" className="text-sky-600 hover:underline" {...props} />
                       )
                     }}
                   >
@@ -351,7 +351,7 @@ export const ChatInterface: React.FC = () => {
                   <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
                     <button
                       onClick={() => tts.speak(msg.text, true)}
-                      className="p-1.5 text-slate-400 hover:text-emerald-500 hover:bg-emerald-50 rounded-md transition-colors"
+                      className="p-1.5 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-md transition-colors"
                       title="Read aloud"
                     >
                       <Volume2 size={14} />
@@ -369,8 +369,8 @@ export const ChatInterface: React.FC = () => {
             <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center">
               <Bot size={16} className="text-slate-400" />
             </div>
-            <div className="bg-white border border-slate-100 p-4 rounded-2xl rounded-tl-none flex items-center gap-2">
-              <Loader2 size={16} className="animate-spin text-emerald-500" />
+            <div className="bg-white border border-slate-100 p-4 rounded-2xl rounded-tl-none flex items-center gap-2 shadow-sm">
+              <Loader2 size={16} className="animate-spin text-sky-500" />
               <span className="text-xs text-slate-400">Thinking...</span>
             </div>
           </div>
@@ -395,7 +395,7 @@ export const ChatInterface: React.FC = () => {
             ))}
             <button 
               onClick={() => fileInputRef.current?.click()}
-              className="flex items-center gap-1 bg-emerald-50 text-emerald-600 rounded-lg px-2 py-1 text-xs border border-emerald-100 hover:bg-emerald-100 transition-colors"
+              className="flex items-center gap-1 bg-sky-50 text-sky-600 rounded-lg px-2 py-1 text-xs border border-sky-100 hover:bg-sky-100 transition-colors"
             >
               <Plus size={12} />
               <span>Add more</span>
@@ -421,7 +421,7 @@ export const ChatInterface: React.FC = () => {
           <div className="flex items-center gap-2">
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="p-2 text-slate-400 hover:text-emerald-500 hover:bg-emerald-50 rounded-lg transition-all"
+              className="p-2 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-lg transition-all"
               title="Upload reports (JPEG/PDF)"
             >
               <Paperclip size={18} />
@@ -436,7 +436,7 @@ export const ChatInterface: React.FC = () => {
             />
             <button
               onClick={generateInsuranceJustification}
-              className="p-2 text-slate-400 hover:text-emerald-500 hover:bg-emerald-50 rounded-lg transition-all"
+              className="p-2 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-lg transition-all"
               title="Insurance Justification"
             >
               <ShieldCheck size={18} />
@@ -452,12 +452,12 @@ export const ChatInterface: React.FC = () => {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Type your question here..."
-            className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all"
+            className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 transition-all"
           />
           <button
             type="submit"
             disabled={(!input.trim() && attachments.length === 0) || isLoading}
-            className="bg-emerald-600 text-white p-3 rounded-xl hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="bg-sky-600 text-white p-3 rounded-xl hover:bg-sky-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
           >
             <Send size={20} />
           </button>

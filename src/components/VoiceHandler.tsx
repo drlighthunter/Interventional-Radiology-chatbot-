@@ -135,7 +135,7 @@ export const VoiceHandler: React.FC<VoiceHandlerProps> = ({
           setSpeechEnabled(!speechEnabled);
           if (isSpeaking) stopSpeech();
         }}
-        className={`p-2 rounded-full transition-all ${speechEnabled ? 'text-emerald-600' : 'text-slate-400'} ${isSpeaking ? 'animate-pulse bg-emerald-100' : ''}`}
+        className={`p-2 rounded-full transition-all ${speechEnabled ? 'text-sky-600' : 'text-slate-400'} ${isSpeaking ? 'animate-pulse bg-sky-100' : ''}`}
         title={speechEnabled ? 'Mute Voice Output' : 'Enable Voice Output'}
       >
         {speechEnabled ? <Volume2 size={18} /> : <VolumeX size={18} />}
@@ -143,7 +143,7 @@ export const VoiceHandler: React.FC<VoiceHandlerProps> = ({
 
       <button
         onClick={() => setUseNaturalVoice(!useNaturalVoice)}
-        className={`p-2 rounded-full transition-all flex items-center gap-1 ${useNaturalVoice ? 'bg-emerald-500 text-white shadow-sm' : 'text-slate-400 hover:text-emerald-500'}`}
+        className={`p-2 rounded-full transition-all flex items-center gap-1 ${useNaturalVoice ? 'bg-sky-500 text-white shadow-sm' : 'text-slate-400 hover:text-sky-500'}`}
         title={useNaturalVoice ? 'Using Natural Voice (Cloud)' : 'Using Local Voice'}
       >
         <Sparkles size={14} />
