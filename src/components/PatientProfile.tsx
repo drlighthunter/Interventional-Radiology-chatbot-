@@ -59,6 +59,46 @@ export const PatientProfile: React.FC<PatientProfileProps> = ({ demographics, on
           </div>
         </div>
 
+        <div className="space-y-2">
+          <label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Planned Procedure</label>
+          <select
+            value={demographics.procedure || ''}
+            onChange={(e) => onChange({ ...demographics, procedure: e.target.value })}
+            className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-sky-500 outline-none"
+          >
+            <option value="">Select Procedure</option>
+            <option value="Uterine Artery Embolization (UAE)">Uterine Artery Embolization (UAE)</option>
+            <option value="Prostate Artery Embolization (PAE)">Prostate Artery Embolization (PAE)</option>
+            <option value="Peripheral Arterial Disease (PAD) Treatment">PAD Treatment</option>
+            <option value="Varicose Vein Ablation">Varicose Vein Ablation</option>
+            <option value="Liver Tumor Embolization (TACE/Y90)">Liver Tumor Embolization</option>
+            <option value="Biopsy / Drainage">Biopsy / Drainage</option>
+            <option value="Kyphoplasty / Vertebroplasty">Kyphoplasty</option>
+            <option value="Other / Not Sure">Other / Not Sure</option>
+          </select>
+        </div>
+
+        <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Current Medications</label>
+            <textarea
+              placeholder="Blood thinners, Aspirin, etc."
+              value={demographics.medications || ''}
+              onChange={(e) => onChange({ ...demographics, medications: e.target.value })}
+              className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-sky-500 outline-none min-h-[60px]"
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Allergies</label>
+            <textarea
+              placeholder="Contrast dye, Latex, Iodine, etc."
+              value={demographics.allergies || ''}
+              onChange={(e) => onChange({ ...demographics, allergies: e.target.value })}
+              className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-sky-500 outline-none min-h-[60px]"
+            />
+          </div>
+        </div>
+
         <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2">
             <label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Current Symptoms</label>

@@ -1,5 +1,5 @@
 // @ts-ignore
-import { pipeline, env } from '@huggingface/transformers?v=2';
+import { pipeline, env } from '@huggingface/transformers?v=3';
 
 // Disable local models, use browser cache
 env.allowLocalModels = false;
@@ -13,7 +13,7 @@ self.onmessage = async (e) => {
   if (type === 'load') {
     try {
       self.postMessage({ status: 'loading' });
-      transcriber = await pipeline('automatic-speech-recognition', 'Xenova/whisper-tiny.en');
+      transcriber = await pipeline('automatic-speech-recognition', 'Xenova/whisper-tiny');
       self.postMessage({ status: 'ready' });
     } catch (err: any) {
       self.postMessage({ status: 'error', error: err.message });

@@ -8,6 +8,9 @@ export interface PatientDemographics {
   latLng?: { latitude: number; longitude: number };
   symptoms?: string;
   diagnosis?: string;
+  medications?: string;
+  allergies?: string;
+  procedure?: string;
 }
 
 export interface Attachment {

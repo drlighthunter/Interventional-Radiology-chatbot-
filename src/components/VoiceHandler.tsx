@@ -31,7 +31,7 @@ export const VoiceHandler: React.FC<VoiceHandlerProps> = ({
 
   useEffect(() => {
     if (useLocalAI && !workerRef.current) {
-      workerRef.current = new Worker(new URL('../workers/whisperWorker.ts?v=2', import.meta.url), { type: 'module' });
+      workerRef.current = new Worker(new URL('../workers/whisperWorker.ts?v=3', import.meta.url), { type: 'module' });
       workerRef.current.onmessage = (e) => {
         setWorkerStatus(e.data.status);
         if (e.data.status === 'complete') {
@@ -125,7 +125,16 @@ export const VoiceHandler: React.FC<VoiceHandlerProps> = ({
         className={`p-2 rounded-full transition-all ${isListening ? 'bg-red-500 text-white animate-pulse' : 'text-slate-500 hover:bg-white hover:shadow-sm'}`}
         title={isListening ? 'Stop Listening' : 'Start Voice Input'}
       >
-        {isListening ? <MicOff size={18} /> : <Mic size={18} />}
+        {isListening ? (
+          <div className="flex items-center gap-0.5 px-1 h-4">
+            <div className="w-0.5 h-2 bg-white rounded-full animate-voice-bar" style={{ animationDelay: '0s' }} />
+            <div className="w-0.5 h-2 bg-white rounded-full animate-voice-bar" style={{ animationDelay: '0.1s' }} />
+            <div className="w-0.5 h-2 bg-white rounded-full animate-voice-bar" style={{ animationDelay: '0.2s' }} />
+            <MicOff size={18} className="ml-1" />
+          </div>
+        ) : (
+          <Mic size={18} />
+        )}
       </button>
       
       <div className="h-4 w-[1px] bg-slate-200 mx-1" />

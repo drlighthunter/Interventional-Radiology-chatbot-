@@ -55,6 +55,8 @@ export const ChatInterface: React.FC = () => {
   const [modelLoading, setModelLoading] = useState(false);
   const [modelProgress, setModelProgress] = useState('');
 
+  const [useCloudFallback, setUseCloudFallback] = useState(false);
+
   const tts = useTTS(language);
 
   const languages: { code: Language; name: string }[] = [
@@ -106,16 +108,20 @@ export const ChatInterface: React.FC = () => {
   const initializeModel = async () => {
     if (isModelReady) return true;
     setModelLoading(true);
-    setModelProgress('Initializing local AI model (downloading ~600MB once)...');
+    setModelProgress('Initializing democratic AI model (downloading ~350MB once)...');
     try {
+      console.log("Starting local model initialization with Transformers.js (Qwen1.5-0.5B)");
       await initLocalModel((progress) => {
+        console.log("Model Progress:", progress.text);
         setModelProgress(progress.text);
       });
       setIsModelReady(true);
+      console.log("Local model initialized successfully.");
       return true;
     } catch (error) {
       console.error("Failed to load local model:", error);
-      alert("Failed to load local AI model. Your device might not support WebGPU or have enough memory.");
+      // Silently fallback to cloud instead of showing an intrusive alert
+      setUseCloudFallback(true);
       return false;
     } finally {
       setModelLoading(false);
@@ -174,11 +180,11 @@ export const ChatInterface: React.FC = () => {
     setIsLoading(true);
 
     try {
-      if (!isModelReady) {
+      if (!isModelReady && !useCloudFallback) {
         const ready = await initializeModel();
         if (!ready) {
-          setIsLoading(false);
-          return;
+          setUseCloudFallback(true);
+          // Don't return, proceed to getLocalChatResponse which will use Gemini fallback
         }
       }
 
@@ -199,8 +205,40 @@ export const ChatInterface: React.FC = () => {
   };
 
   const generateInsuranceJustification = () => {
-    const prompt = "Please generate a formal insurance justification letter for an IR procedure based on my demographics and medical history provided.";
-    handleSend(prompt);
+    const details = demographics.procedure 
+      ? `for the planned procedure: ${demographics.procedure}`
+      : "for an Interventional Radiology procedure";
+    
+    const context = `
+Patient Details:
+- Age/Gender: ${demographics.age || 'N/A'} / ${demographics.gender || 'N/A'}
+- Diagnosis: ${demographics.diagnosis || 'N/A'}
+- Symptoms: ${demographics.symptoms || 'N/A'}
+- Medical History: ${demographics.history || 'N/A'}
+- Medications: ${demographics.medications || 'N/A'}
+- Allergies: ${demographics.allergies || 'N/A'}
+
+Please generate a formal, professional insurance justification letter ${details}. 
+The letter should emphasize why this minimally invasive IR procedure is medically necessary compared to traditional surgery, 
+citing the patient's specific symptoms and history provided above. 
+Use a standard medical letter format.
+`.trim();
+
+    handleSend(context);
+  };
+
+  const downloadTranscript = () => {
+    if (messages.length === 0) return;
+    const transcript = messages.map(m => `${m.role === 'user' ? 'Patient' : 'AI Assistant'}: ${m.text}`).join('\n\n');
+    const blob = new Blob([transcript], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `IR_Guide_Transcript_${new Date().toISOString().split('T')[0]}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
   const emailTranscript = async () => {
@@ -254,16 +292,46 @@ export const ChatInterface: React.FC = () => {
             "flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-medium border",
             isModelReady 
               ? "bg-emerald-50 text-emerald-700 border-emerald-200" 
-              : "bg-amber-50 text-amber-700 border-amber-200"
+              : useCloudFallback
+                ? "bg-blue-50 text-blue-700 border-blue-200"
+                : "bg-amber-50 text-amber-700 border-amber-200"
           )}>
-            <Smartphone size={14} />
+            {useCloudFallback ? <Bot size={14} /> : <Smartphone size={14} />}
             <span className="hidden sm:inline">
-              {isModelReady ? '100% Local AI Ready' : '100% Local AI (Offline)'}
+              {isModelReady 
+                ? '100% Local AI Ready' 
+                : useCloudFallback 
+                  ? 'Cloud AI Fallback Active' 
+                  : '100% Local AI (Offline)'}
             </span>
+            {(isModelReady || useCloudFallback) && (
+              <button 
+                onClick={() => {
+                  setIsModelReady(false);
+                  setUseCloudFallback(false);
+                  initializeModel();
+                }}
+                className={cn(
+                  "ml-1 p-0.5 rounded transition-colors",
+                  isModelReady ? "hover:bg-emerald-100" : "hover:bg-blue-100"
+                )}
+                title="Reload AI Model"
+              >
+                <Plus size={12} className="rotate-45" />
+              </button>
+            )}
           </div>
           
           {messages.length > 0 && (
             <>
+              <button
+                onClick={downloadTranscript}
+                className="text-xs text-slate-500 hover:text-sky-600 transition-colors flex items-center gap-1"
+                title="Download Transcript"
+              >
+                <FileText size={14} />
+                <span className="hidden sm:inline">Download</span>
+              </button>
               <button
                 onClick={emailTranscript}
                 className="text-xs text-slate-500 hover:text-sky-600 transition-colors flex items-center gap-1"
@@ -325,6 +393,43 @@ export const ChatInterface: React.FC = () => {
 
       {/* Chat Area */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50">
+        {demographics.procedure && messages.length === 0 && (
+          <motion.div 
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-sky-50 border border-sky-100 rounded-2xl p-4 mb-4"
+          >
+            <div className="flex items-center gap-2 mb-2">
+              <ShieldCheck size={18} className="text-sky-600" />
+              <h3 className="font-semibold text-sky-900 text-sm">Procedure Guide: {demographics.procedure}</h3>
+            </div>
+            <p className="text-xs text-sky-700 mb-3">
+              I've tailored my knowledge to help you with your upcoming {demographics.procedure}. 
+              You can ask about preparation, what happens during the procedure, or recovery.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <button 
+                onClick={() => handleSend(`Tell me about the preparation for ${demographics.procedure}`)}
+                className="text-[10px] bg-white text-sky-700 px-2 py-1 rounded-md border border-sky-200 hover:bg-sky-100 transition-colors"
+              >
+                Preparation
+              </button>
+              <button 
+                onClick={() => handleSend(`What are the risks and benefits of ${demographics.procedure}?`)}
+                className="text-[10px] bg-white text-sky-700 px-2 py-1 rounded-md border border-sky-200 hover:bg-sky-100 transition-colors"
+              >
+                Risks & Benefits
+              </button>
+              <button 
+                onClick={() => handleSend(`How long is the recovery for ${demographics.procedure}?`)}
+                className="text-[10px] bg-white text-sky-700 px-2 py-1 rounded-md border border-sky-200 hover:bg-sky-100 transition-colors"
+              >
+                Recovery
+              </button>
+            </div>
+          </motion.div>
+        )}
+
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-center space-y-4 text-slate-500">
             <Bot size={48} className="text-slate-300" />

@@ -30,6 +30,26 @@ files.forEach(file => {
     content = content.replace(/32 << 10/g, '16 << 10');
     changed = true;
   }
+  if (content.includes('"shader-f16"')) {
+    content = content.replace(/"shader-f16"/g, '"patched-out"');
+    changed = true;
+  }
+  if (content.includes("'shader-f16'")) {
+    content = content.replace(/'shader-f16'/g, '"patched-out"');
+    changed = true;
+  }
+  if (content.includes('/* patched */')) {
+    content = content.replace(/\/\* patched \*\//g, '"patched-out"');
+    changed = true;
+  }
+  if (content.includes('if (!gpuDetectOutput.device.features.has(feature)) {')) {
+    content = content.replace(/if \(!gpuDetectOutput\.device\.features\.has\(feature\)\) \{/g, 'if (feature !== "shader-f16" && feature !== "patched-out" && !gpuDetectOutput.device.features.has(feature)) {');
+    changed = true;
+  }
+  if (content.includes('throw new ShaderF16SupportError()')) {
+    content = content.replace(/throw new ShaderF16SupportError\(\)/g, 'console.warn("Patched: Ignored ShaderF16SupportError")');
+    changed = true;
+  }
   if (changed) {
     fs.writeFileSync(file, content);
     console.log('Patched', file);
