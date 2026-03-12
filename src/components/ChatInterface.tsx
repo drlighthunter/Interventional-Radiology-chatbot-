@@ -1,10 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, User, Bot, Loader2 } from 'lucide-react';
+import { Send, User, Bot, Loader2, Copy, Check, Paperclip, FileText, Plus, Trash2, ShieldCheck, Volume2 } from 'lucide-react';
 import Markdown from 'react-markdown';
 import { motion, AnimatePresence } from 'motion/react';
-import { Message, Language } from '../types';
-import { getChatResponse, logAnalytics } from '../services/geminiService';
+import { Message, Language, PatientDemographics, Attachment } from '../types';
+import { getChatResponse, logAnalytics } from '../services/localChatService';
 import { VoiceHandler } from './VoiceHandler';
+import { PatientProfile } from './PatientProfile';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
@@ -12,13 +13,41 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+const CopyButton: React.FC<{ text: string }> = ({ text }) => {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy text: ', err);
+    }
+  };
+
+  return (
+    <button
+      onClick={handleCopy}
+      className="p-1.5 text-slate-400 hover:text-emerald-500 hover:bg-emerald-50 rounded-md transition-colors"
+      title="Copy response"
+    >
+      {copied ? <Check size={14} /> : <Copy size={14} />}
+    </button>
+  );
+};
+
 export const ChatInterface: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [language, setLanguage] = useState<Language>('en');
   const [isLoading, setIsLoading] = useState(false);
   const [userId] = useState(() => Math.random().toString(36).substring(7));
+  const [demographics, setDemographics] = useState<PatientDemographics>({});
+  const [showProfile, setShowProfile] = useState(false);
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const languages: { code: Language; name: string }[] = [
     { code: 'en', name: 'English' },
@@ -26,6 +55,11 @@ export const ChatInterface: React.FC = () => {
     { code: 'kn', name: 'Kannada (à²•à²¨à¥à²¨à²¡)' },
     { code: 'ta', name: 'Tamil (à®¤à®®à®¿à®´à¯)' },
     { code: 'te', name: 'Telugu (à°¤à±†à°²à±à°—à±)' },
+    { code: 'ml', name: 'Malayalam (à´®à´²à´¯à´¾à´³à´‚)' },
+    { code: 'or', name: 'Oriya (à¬à¬¡à¬¼à¬¿à¬)' },
+    { code: 'bn', name: 'Bangla (à¦¬à¦¾à¦à¦²à¦¾)' },
+    { code: 'mr', name: 'Marathi (à¤®à¤°à¤¾à¤ à¥€)' },
+    { code: 'gu', name: 'Gujarati (àª—à«àªàª°àª¾àª¤à«€)' },
   ];
 
   useEffect(() => {
@@ -34,17 +68,45 @@ export const ChatInterface: React.FC = () => {
     }
   }, [messages]);
 
-  const handleSend = async (text: string) => {
-    if (!text.trim() || isLoading) return;
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
 
-    const userMessage: Message = { role: 'user', text };
+    Array.from(files).forEach(file => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setAttachments(prev => [...prev, {
+          name: file.name,
+          type: file.type,
+          data: reader.result as string
+        }]);
+      };
+      reader.readAsDataURL(file);
+    });
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const removeAttachment = (index: number) => {
+    setAttachments(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleSend = async (text: string, overrideAttachments?: Attachment[]) => {
+    const currentAttachments = overrideAttachments || attachments;
+    if ((!text.trim() && currentAttachments.length === 0) || isLoading) return;
+
+    const userMessage: Message = { 
+      role: 'user', 
+      text,
+      attachments: currentAttachments.length > 0 ? currentAttachments : undefined
+    };
     const newMessages = [...messages, userMessage];
     setMessages(newMessages);
     setInput('');
+    setAttachments([]);
     setIsLoading(true);
 
     try {
-      const response = await getChatResponse(newMessages, language);
+      const response = await getChatResponse(newMessages, language, demographics);
       const botMessage: Message = { role: 'model', text: response || 'Sorry, I could not process that.' };
       setMessages(prev => [...prev, botMessage]);
 
@@ -53,8 +115,7 @@ export const ChatInterface: React.FC = () => {
         userId,
         language,
         rawMessage: text,
-        // The model could potentially return structured data if we asked, 
-        // but for now we log the raw interaction for the developer to "scrape"
+        demographics
       });
     } catch (error) {
       console.error(error);
@@ -62,6 +123,11 @@ export const ChatInterface: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const generateInsuranceJustification = () => {
+    const prompt = "Please generate a formal insurance justification letter for an IR procedure based on my demographics and medical history provided.";
+    handleSend(prompt);
   };
 
   return (
@@ -74,11 +140,24 @@ export const ChatInterface: React.FC = () => {
           </div>
           <div>
             <h1 className="font-bold text-lg leading-tight">IR Patient Guide</h1>
-            <p className="text-xs text-slate-400">Multilingual IR Assistant</p>
+            <div className="flex items-center gap-2">
+              <p className="text-xs text-slate-400">Local Assistant (Offline)</p>
+              <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded border border-emerald-500/30 font-medium">Self-Contained</span>
+            </div>
           </div>
         </div>
         
         <div className="flex items-center gap-4">
+          <button
+            onClick={() => setShowProfile(!showProfile)}
+            className={cn(
+              "p-2 rounded-lg transition-colors",
+              showProfile ? "bg-emerald-500 text-white" : "bg-slate-800 text-slate-400 hover:text-white"
+            )}
+            title="Patient Profile"
+          >
+            <User size={20} />
+          </button>
           <select
             value={language}
             onChange={(e) => setLanguage(e.target.value as Language)}
@@ -88,13 +167,16 @@ export const ChatInterface: React.FC = () => {
               <option key={lang.code} value={lang.code}>{lang.name}</option>
             ))}
           </select>
-          <VoiceHandler 
-            language={language} 
-            onSpeechEnd={handleSend} 
-            lastResponse={messages[messages.length - 1]?.role === 'model' ? messages[messages.length - 1].text : undefined}
-          />
         </div>
       </header>
+
+      {showProfile && (
+        <PatientProfile 
+          demographics={demographics} 
+          onChange={setDemographics} 
+          onClose={() => setShowProfile(false)} 
+        />
+      )}
 
       {/* Chat Area */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50">
@@ -108,8 +190,8 @@ export const ChatInterface: React.FC = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full max-w-lg">
               {[
                 "What is an angioplasty?",
+                "Pre-op for angiography",
                 "I have leg pain when walking",
-                "Pre-op instructions for biopsy",
                 "Post-op care for embolization"
               ].map((suggestion) => (
                 <button
@@ -120,6 +202,13 @@ export const ChatInterface: React.FC = () => {
                   {suggestion}
                 </button>
               ))}
+              <button
+                onClick={generateInsuranceJustification}
+                className="text-left p-3 text-sm bg-emerald-50 border border-emerald-100 rounded-xl hover:border-emerald-500 hover:bg-emerald-100 transition-all flex items-center gap-2 group"
+              >
+                <ShieldCheck size={16} className="text-emerald-600 group-hover:scale-110 transition-transform" />
+                <span>Insurance Justification</span>
+              </button>
             </div>
           </div>
         )}
@@ -142,14 +231,45 @@ export const ChatInterface: React.FC = () => {
                 {msg.role === 'user' ? <User size={16} /> : <Bot size={16} />}
               </div>
               <div className={cn(
-                "p-4 rounded-2xl text-sm leading-relaxed shadow-sm",
+                "p-4 rounded-2xl text-sm leading-relaxed shadow-sm relative group",
                 msg.role === 'user' 
                   ? "bg-emerald-600 text-white rounded-tr-none" 
                   : "bg-white text-slate-800 border border-slate-100 rounded-tl-none"
               )}>
+                {msg.attachments && msg.attachments.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    {msg.attachments.map((att, idx) => (
+                      <div key={idx} className="flex items-center gap-2 bg-black/10 rounded-lg px-2 py-1 text-[10px]">
+                        {att.type.startsWith('image/') ? <Paperclip size={10} /> : <FileText size={10} />}
+                        <span className="truncate max-w-[100px]">{att.name}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 <div className="prose prose-sm max-w-none prose-p:leading-relaxed prose-pre:bg-slate-800 prose-pre:text-slate-100">
                   <Markdown>{msg.text}</Markdown>
                 </div>
+                {msg.role === 'model' && (
+                  <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+                    <button
+                      onClick={() => {
+                        const voiceHandler = document.querySelector('[title="Mute Voice Output"], [title="Enable Voice Output"]');
+                        // This is a bit hacky, but since VoiceHandler is a separate component, 
+                        // we can trigger a re-read by just calling the speak function if we had access to it.
+                        // For now, let's just use the local speak as a quick way to re-read.
+                        const utterance = new SpeechSynthesisUtterance(msg.text.replace(/[#*`]/g, ''));
+                        utterance.lang = language === 'en' ? 'en-US' : language + '-IN';
+                        window.speechSynthesis.cancel();
+                        window.speechSynthesis.speak(utterance);
+                      }}
+                      className="p-1.5 text-slate-400 hover:text-emerald-500 hover:bg-emerald-50 rounded-md transition-colors"
+                      title="Read aloud"
+                    >
+                      <Volume2 size={14} />
+                    </button>
+                    <CopyButton text={msg.text} />
+                  </div>
+                )}
               </div>
             </motion.div>
           ))}
@@ -170,6 +290,65 @@ export const ChatInterface: React.FC = () => {
 
       {/* Input Area */}
       <div className="p-4 bg-white border-t border-slate-100">
+        {attachments.length > 0 && (
+          <div className="flex flex-wrap gap-2 mb-3 animate-in fade-in slide-in-from-bottom-2">
+            {attachments.map((att, idx) => (
+              <div key={idx} className="flex items-center gap-2 bg-slate-100 rounded-lg pl-2 pr-1 py-1 text-xs text-slate-600 border border-slate-200">
+                {att.type.startsWith('image/') ? <Paperclip size={12} /> : <FileText size={12} />}
+                <span className="truncate max-w-[120px]">{att.name}</span>
+                <button 
+                  onClick={() => removeAttachment(idx)}
+                  className="p-1 hover:text-red-500 transition-colors"
+                >
+                  <Trash2 size={12} />
+                </button>
+              </div>
+            ))}
+            <button 
+              onClick={() => fileInputRef.current?.click()}
+              className="flex items-center gap-1 bg-emerald-50 text-emerald-600 rounded-lg px-2 py-1 text-xs border border-emerald-100 hover:bg-emerald-100 transition-colors"
+            >
+              <Plus size={12} />
+              <span>Add more</span>
+            </button>
+          </div>
+        )}
+
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <div className="flex items-center gap-2">
+            <VoiceHandler 
+              language={language} 
+              onSpeechEnd={handleSend} 
+              lastResponse={messages[messages.length - 1]?.role === 'model' ? messages[messages.length - 1].text : undefined}
+            />
+            <span className="text-[10px] text-slate-400">Speak your query or type below</span>
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="p-2 text-slate-400 hover:text-emerald-500 hover:bg-emerald-50 rounded-lg transition-all"
+              title="Upload reports (JPEG/PDF)"
+            >
+              <Paperclip size={18} />
+            </button>
+            <input 
+              type="file" 
+              ref={fileInputRef} 
+              onChange={handleFileChange} 
+              className="hidden" 
+              accept="image/jpeg,image/png,application/pdf"
+              multiple
+            />
+            <button
+              onClick={generateInsuranceJustification}
+              className="p-2 text-slate-400 hover:text-emerald-500 hover:bg-emerald-50 rounded-lg transition-all"
+              title="Insurance Justification"
+            >
+              <ShieldCheck size={18} />
+            </button>
+          </div>
+        </div>
         <form 
           onSubmit={(e) => { e.preventDefault(); handleSend(input); }}
           className="flex gap-2"

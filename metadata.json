@@ -1,5 +1,5 @@
 {
   "name": "IR Patient Guide",
-  "description": "Multilingual AI chatbot for Interventional Radiology procedures, providing pre/post-op instructions and symptom matching.",
+  "description": "Self-contained local IR assistant providing multilingual guidance, procedure instructions, and automated insurance justification letters.",
   "requestFramePermissions": ["microphone"]
 }
