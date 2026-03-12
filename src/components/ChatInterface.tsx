@@ -1,9 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, User, Bot, Loader2, Copy, Check, Paperclip, FileText, Plus, Trash2, ShieldCheck, Volume2, Mail } from 'lucide-react';
+import { Send, User, Bot, Loader2, Copy, Check, Paperclip, FileText, Plus, Trash2, ShieldCheck, Volume2, Mail, Cpu } from 'lucide-react';
 import Markdown from 'react-markdown';
 import { motion, AnimatePresence } from 'motion/react';
 import { Message, Language, PatientDemographics, Attachment } from '../types';
 import { getChatResponse, logAnalytics } from '../services/localChatService';
+import { initLocalModel, getLocalChatResponse } from '../services/webLlmService';
 import { VoiceHandler } from './VoiceHandler';
 import { PatientProfile } from './PatientProfile';
 import { useTTS } from '../services/ttsService';
@@ -51,19 +52,24 @@ export const ChatInterface: React.FC = () => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Local AI State
+  const [isLocalMode, setIsLocalMode] = useState(false);
+  const [localModelLoading, setLocalModelLoading] = useState(false);
+  const [localModelProgress, setLocalModelProgress] = useState('');
+
   const tts = useTTS(language);
 
   const languages: { code: Language; name: string }[] = [
     { code: 'en', name: 'English' },
-    { code: 'hi', name: 'Hindi (à¤¹à¤¿à¤¨à¥à¤¦à¥€)' },
-    { code: 'kn', name: 'Kannada (à²•à²¨à¥à²¨à²¡)' },
-    { code: 'ta', name: 'Tamil (à®¤à®®à®¿à®´à¯)' },
-    { code: 'te', name: 'Telugu (à°¤à±†à°²à±à°—à±)' },
-    { code: 'ml', name: 'Malayalam (à´®à´²à´¯à´¾à´³à´‚)' },
-    { code: 'or', name: 'Oriya (à¬“à¬¡à¬¼à¬¿à¬†)' },
-    { code: 'bn', name: 'Bangla (à¦¬à¦¾à¦à¦²à¦¾)' },
-    { code: 'mr', name: 'Marathi (à¤®à¤°à¤¾à¤ à¥€)' },
-    { code: 'gu', name: 'Gujarati (àª—à«àªàª°àª¾àª¤à«€)' },
+    { code: 'hi', name: 'Hindi (हिन्दी)' },
+    { code: 'kn', name: 'Kannada (ಕನ್ನಡ)' },
+    { code: 'ta', name: 'Tamil (தமிழ்)' },
+    { code: 'te', name: 'Telugu (తెలుగు)' },
+    { code: 'ml', name: 'Malayalam (മലയാളം)' },
+    { code: 'or', name: 'Oriya (ଓଡ଼ିଆ)' },
+    { code: 'bn', name: 'Bangla (বাংলা)' },
+    { code: 'mr', name: 'Marathi (मराठी)' },
+    { code: 'gu', name: 'Gujarati (ગુજરાતી)' },
   ];
 
   useEffect(() => {
@@ -90,6 +96,27 @@ export const ChatInterface: React.FC = () => {
       );
     }
   }, []);
+
+  const toggleLocalMode = async () => {
+    if (!isLocalMode) {
+      setLocalModelLoading(true);
+      setLocalModelProgress('Initializing local model...');
+      try {
+        await initLocalModel((progress) => {
+          setLocalModelProgress(progress.text);
+        });
+        setIsLocalMode(true);
+      } catch (error) {
+        console.error("Failed to load local model:", error);
+        alert("Failed to load local AI model. Your browser might not support WebGPU or you might not have enough memory.");
+      } finally {
+        setLocalModelLoading(false);
+        setLocalModelProgress('');
+      }
+    } else {
+      setIsLocalMode(false);
+    }
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -142,7 +169,13 @@ export const ChatInterface: React.FC = () => {
     setIsLoading(true);
 
     try {
-      const response = await getChatResponse(newMessages, language, demographics);
+      let response = '';
+      if (isLocalMode) {
+        response = await getLocalChatResponse(newMessages, language, demographics);
+      } else {
+        response = await getChatResponse(newMessages, language, demographics);
+      }
+      
       const botMessage: Message = { role: 'model', text: response || 'Sorry, I could not process that.' };
       setMessages(prev => [...prev, botMessage]);
 
@@ -154,7 +187,8 @@ export const ChatInterface: React.FC = () => {
         userId,
         language,
         rawMessage: text,
-        demographics
+        demographics,
+        isLocalMode
       });
     } catch (error) {
       console.error(error);
@@ -216,6 +250,24 @@ export const ChatInterface: React.FC = () => {
         </div>
         
         <div className="flex items-center gap-4">
+          <button
+            onClick={toggleLocalMode}
+            disabled={localModelLoading}
+            className={cn(
+              "flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-medium transition-colors border",
+              isLocalMode 
+                ? "bg-emerald-50 text-emerald-700 border-emerald-200" 
+                : "bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100",
+              localModelLoading && "opacity-50 cursor-not-allowed"
+            )}
+            title="Run AI locally on your device (Private & Free)"
+          >
+            {localModelLoading ? <Loader2 size={14} className="animate-spin" /> : <Cpu size={14} />}
+            <span className="hidden sm:inline">
+              {localModelLoading ? 'Loading...' : isLocalMode ? 'Local AI Active' : 'Use Local AI'}
+            </span>
+          </button>
+          
           {messages.length > 0 && (
             <>
               <button
@@ -266,6 +318,15 @@ export const ChatInterface: React.FC = () => {
           onChange={setDemographics} 
           onClose={() => setShowProfile(false)} 
         />
+      )}
+
+      {localModelProgress && (
+        <div className="bg-emerald-50 border-b border-emerald-100 px-4 py-2 text-xs text-emerald-700 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Loader2 size={14} className="animate-spin" />
+            <span>{localModelProgress}</span>
+          </div>
+        </div>
       )}
 
       {/* Chat Area */}

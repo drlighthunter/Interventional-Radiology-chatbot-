@@ -2,14 +2,14 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { Language, Message, PatientDemographics } from "../types";
 import { searchOpenFDA, searchPubMed, searchOSM, fetchProcedureImage } from "./apiServices";
 
-const TRANSLATIONS: Record<Language, any> = {
+const TRANSLATIONS: Partial<Record<Language, any>> = {
   en: {
     insurance_title: "### Insurance Justification Letter (Draft)",
     insurance_subject: "**Subject:** Medical Necessity for IR Procedure",
   },
   hi: {
-    insurance_title: "### à¤¬à¥€à¤®à¤¾ à¤”à¤šà¤¿à¤¤à¥à¤¯ à¤ªà¤¤à¥à¤° (à¤¡à¥à¤°à¤¾à¤«à¥à¤Ÿ)",
-    insurance_subject: "**à¤µà¤¿à¤·à¤¯:** IR à¤ªà¥à¤°à¤•à¥à¤°à¤¿à¤¯à¤¾ à¤•à¥€ à¤šà¤¿à¤•à¤¿à¤¤à¥à¤¸à¥€à¤¯ à¤†à¤µà¤¶à¥à¤¯à¤•à¤¤à¤¾",
+    insurance_title: "### बीमा औचित्य पत्र (ड्राफ्ट)",
+    insurance_subject: "**विषय:** IR प्रक्रिया की चिकित्सीय आवश्यकता",
   },
   // Add other translations if needed
 };
@@ -49,7 +49,7 @@ Language to respond in: ${language} (Respond primarily in this language, using a
 If the user asks for an insurance justification letter, generate a formal, professional draft using their demographics and medical history, explaining why an IR procedure is medically necessary and cost-effective compared to traditional surgery.
 
 If the user asks about Ayushman Bharat supported procedures and their tentative pricing for Interventional Radiology, use the googleSearch tool to find the latest information from the Karnataka SAST Arogya portal or other official sources.
-If the user asks to find nearby Interventional Radiology providers or services, use the googleMaps tool to search for them based on their location.
+If the user asks to find nearby Interventional Radiology providers or services, use the searchOSM tool to search for them based on their location.
 
 If the user asks for an image, diagram, or visual of a procedure, use the fetchProcedureImage tool to get image URLs. You MUST embed the returned image URLs in your response using Markdown image syntax: ![Title](URL).
 
@@ -92,8 +92,7 @@ You have access to additional free tools:
       systemInstruction,
       temperature: 0.7,
       tools: [
-        { googleSearch: {} }, 
-        { googleMaps: {} },
+        { googleSearch: {} },
         {
           functionDeclarations: [
             {
@@ -133,7 +132,7 @@ You have access to additional free tools:
     }
 
     let response = await ai.models.generateContent({
-      model: "gemini-2.5-pro",
+      model: "gemini-3-flash-preview",
       contents: formattedContents,
       config
     });
@@ -142,16 +141,16 @@ You have access to additional free tools:
       const functionResponses = [];
       for (const call of response.functionCalls) {
         if (call.name === 'searchOpenFDA') {
-          const result = await searchOpenFDA(call.args.drugName);
+          const result = await searchOpenFDA(call.args.drugName as string);
           functionResponses.push({ name: call.name, response: result });
         } else if (call.name === 'searchPubMed') {
-          const result = await searchPubMed(call.args.query);
+          const result = await searchPubMed(call.args.query as string);
           functionResponses.push({ name: call.name, response: result });
         } else if (call.name === 'searchOSM') {
-          const result = await searchOSM(call.args.query, demographics?.latLng?.latitude, demographics?.latLng?.longitude);
+          const result = await searchOSM(call.args.query as string, demographics?.latLng?.latitude, demographics?.latLng?.longitude);
           functionResponses.push({ name: call.name, response: result });
         } else if (call.name === 'fetchProcedureImage') {
-          const result = await fetchProcedureImage(call.args.query);
+          const result = await fetchProcedureImage(call.args.query as string);
           functionResponses.push({ name: call.name, response: result });
         }
       }
@@ -171,7 +170,7 @@ You have access to additional free tools:
       });
 
       response = await ai.models.generateContent({
-        model: "gemini-2.5-pro",
+        model: "gemini-3-flash-preview",
         contents: formattedContents,
         config
       });
@@ -204,8 +203,12 @@ You have access to additional free tools:
     }
 
     return text;
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error calling Gemini API:", error);
+    const errorStr = JSON.stringify(error) + (error.message || '');
+    if (errorStr.includes('429') || errorStr.includes('RESOURCE_EXHAUSTED') || errorStr.includes('quota')) {
+      return "I'm sorry, but the AI service has exceeded its current quota or rate limit. Please try again in a few moments.";
+    }
     return "I'm sorry, I encountered an error while processing your request. Please try again.";
   }
 }
