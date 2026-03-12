@@ -1,112 +1,121 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Mic, MicOff, Volume2, VolumeX, Sparkles } from 'lucide-react';
-import { generateSpeech, playAudio } from '../services/ttsService';
+import React, { useState, useEffect, useRef } from 'react';
+import { Mic, MicOff, Volume2, VolumeX, Sparkles, Brain } from 'lucide-react';
 
 interface VoiceHandlerProps {
   onSpeechEnd: (text: string) => void;
-  lastResponse?: string;
   language: string;
+  speechEnabled: boolean;
+  setSpeechEnabled: (enabled: boolean) => void;
+  useNaturalVoice: boolean;
+  setUseNaturalVoice: (enabled: boolean) => void;
+  isSpeaking: boolean;
+  stopSpeech: () => void;
 }
 
-export const VoiceHandler: React.FC<VoiceHandlerProps> = ({ onSpeechEnd, lastResponse, language }) => {
+export const VoiceHandler: React.FC<VoiceHandlerProps> = ({ 
+  onSpeechEnd, language, speechEnabled, setSpeechEnabled, useNaturalVoice, setUseNaturalVoice, isSpeaking, stopSpeech 
+}) => {
   const [isListening, setIsListening] = useState(false);
-  const [isSpeaking, setIsSpeaking] = useState(false);
-  const [speechEnabled, setSpeechEnabled] = useState(true);
-  const [useNaturalVoice, setUseNaturalVoice] = useState(false);
+  const [useLocalAI, setUseLocalAI] = useState(false);
+  const [workerStatus, setWorkerStatus] = useState<string>('idle');
+  
+  const workerRef = useRef<Worker | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
 
-  // Map app language codes to BCP 47 tags
   const langMap: Record<string, string> = {
-    en: 'en-US',
-    hi: 'hi-IN',
-    kn: 'kn-IN',
-    ta: 'ta-IN',
-    te: 'te-IN',
-    ml: 'ml-IN',
-    or: 'or-IN',
-    bn: 'bn-IN',
-    mr: 'mr-IN',
-    gu: 'gu-IN'
+    en: 'en-US', hi: 'hi-IN', kn: 'kn-IN', ta: 'ta-IN', te: 'te-IN',
+    ml: 'ml-IN', or: 'or-IN', bn: 'bn-IN', mr: 'mr-IN', gu: 'gu-IN'
   };
-
   const currentLang = langMap[language] || 'en-US';
 
-  const cleanTextForSpeech = (text: string) => {
-    return text
-      .replace(/#{1,6}\s?/g, '') // Remove headers
-      .replace(/\*\*/g, '') // Remove bold
-      .replace(/\*/g, '') // Remove italics
-      .replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1') // Remove links but keep text
-      .replace(/<[^>]*>?/gm, '') // Remove HTML tags
-      .replace(/[-*]\s/g, '') // Remove list bullets
-      .replace(/[\n\r]+/g, ' ') // Replace newlines with spaces
-      .replace(/[^\w\s\u0900-\u097F\u0C80-\u0CFF\u0B80-\u0BFF\u0C00-\u0C7F\u0D00-\u0D7F\u0B00-\u0B7F\u0980-\u09FF\u0A80-\u0AFF]/gi, ' ') // Keep alphanumeric and Indian scripts, replace others with space
-      .trim();
-  };
+  useEffect(() => {
+    if (useLocalAI && !workerRef.current) {
+      workerRef.current = new Worker(new URL('../workers/whisperWorker.ts', import.meta.url), { type: 'module' });
+      workerRef.current.onmessage = (e) => {
+        setWorkerStatus(e.data.status);
+        if (e.data.status === 'complete') {
+          onSpeechEnd(e.data.text);
+          setIsListening(false);
+        } else if (e.data.status === 'error') {
+          console.error('Whisper error:', e.data.error);
+          setIsListening(false);
+        }
+      };
+      workerRef.current.postMessage({ type: 'load' });
+    }
+    return () => {
+      // Cleanup worker on unmount if needed, but usually we keep it alive for performance
+    };
+  }, [useLocalAI, onSpeechEnd]);
 
-  const speak = useCallback(async (text: string) => {
-    if (!speechEnabled || !text) return;
-    
-    const cleanedText = cleanTextForSpeech(text);
-    if (!cleanedText) return;
-
-    if (useNaturalVoice) {
-      setIsSpeaking(true);
-      const audioData = await generateSpeech(cleanedText, language);
-      if (audioData) {
-        playAudio(audioData);
-        // We don't have a reliable way to know when playAudio ends without more complex logic
-        // but for now this is a good start.
-        setTimeout(() => setIsSpeaking(false), 5000); 
+  const toggleListening = async () => {
+    if (isListening) {
+      if (useLocalAI && mediaRecorderRef.current) {
+        mediaRecorderRef.current.stop();
       } else {
-        // Fallback to local voice if cloud fails
-        localSpeak(cleanedText);
+        setIsListening(false);
+      }
+      return;
+    }
+
+    if (useLocalAI) {
+      if (workerStatus !== 'ready' && workerStatus !== 'complete') {
+        alert('Local AI model is still loading. Please wait a moment.');
+        return;
+      }
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const mediaRecorder = new MediaRecorder(stream);
+        mediaRecorderRef.current = mediaRecorder;
+        audioChunksRef.current = [];
+
+        mediaRecorder.ondataavailable = (e) => {
+          if (e.data.size > 0) audioChunksRef.current.push(e.data);
+        };
+
+        mediaRecorder.onstop = async () => {
+          const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+          const arrayBuffer = await audioBlob.arrayBuffer();
+          const audioContext = new AudioContext({ sampleRate: 16000 });
+          const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+          const audioData = audioBuffer.getChannelData(0); // Float32Array at 16kHz
+          
+          if (workerRef.current) {
+            workerRef.current.postMessage({ type: 'transcribe', audioData });
+          }
+          
+          stream.getTracks().forEach(track => track.stop());
+        };
+
+        mediaRecorder.start();
+        setIsListening(true);
+      } catch (err) {
+        console.error('Microphone error:', err);
+        alert('Could not access microphone.');
       }
     } else {
-      localSpeak(cleanedText);
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+        alert('Speech recognition is not supported in this browser. Please try Chrome or Edge, or enable Local AI Transcription.');
+        return;
+      }
+
+      const recognition = new SpeechRecognition();
+      recognition.lang = currentLang;
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+
+      recognition.onstart = () => setIsListening(true);
+      recognition.onresult = (event: any) => {
+        const text = event.results[0][0].transcript;
+        onSpeechEnd(text);
+      };
+      recognition.onerror = () => setIsListening(false);
+      recognition.onend = () => setIsListening(false);
+
+      recognition.start();
     }
-  }, [currentLang, speechEnabled, useNaturalVoice, language]);
-
-  const localSpeak = (text: string) => {
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = currentLang;
-    utterance.onstart = () => setIsSpeaking(true);
-    utterance.onend = () => setIsSpeaking(false);
-    window.speechSynthesis.speak(utterance);
-  };
-
-  useEffect(() => {
-    if (lastResponse) {
-      speak(lastResponse);
-    }
-  }, [lastResponse, speak]);
-
-  const toggleListening = () => {
-    if (isListening) {
-      setIsListening(false);
-      return;
-    }
-
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      alert('Speech recognition is not supported in this browser.');
-      return;
-    }
-
-    const recognition = new SpeechRecognition();
-    recognition.lang = currentLang;
-    recognition.interimResults = false;
-    recognition.maxAlternatives = 1;
-
-    recognition.onstart = () => setIsListening(true);
-    recognition.onresult = (event: any) => {
-      const text = event.results[0][0].transcript;
-      onSpeechEnd(text);
-    };
-    recognition.onerror = () => setIsListening(false);
-    recognition.onend = () => setIsListening(false);
-
-    recognition.start();
   };
 
   return (
@@ -124,9 +133,9 @@ export const VoiceHandler: React.FC<VoiceHandlerProps> = ({ onSpeechEnd, lastRes
       <button
         onClick={() => {
           setSpeechEnabled(!speechEnabled);
-          if (isSpeaking) window.speechSynthesis.cancel();
+          if (isSpeaking) stopSpeech();
         }}
-        className={`p-2 rounded-full transition-all ${speechEnabled ? 'text-emerald-600' : 'text-slate-400'}`}
+        className={`p-2 rounded-full transition-all ${speechEnabled ? 'text-emerald-600' : 'text-slate-400'} ${isSpeaking ? 'animate-pulse bg-emerald-100' : ''}`}
         title={speechEnabled ? 'Mute Voice Output' : 'Enable Voice Output'}
       >
         {speechEnabled ? <Volume2 size={18} /> : <VolumeX size={18} />}
@@ -139,6 +148,17 @@ export const VoiceHandler: React.FC<VoiceHandlerProps> = ({ onSpeechEnd, lastRes
       >
         <Sparkles size={14} />
         {useNaturalVoice && <span className="text-[10px] font-bold pr-1">AI</span>}
+      </button>
+
+      <div className="h-4 w-[1px] bg-slate-200 mx-1" />
+
+      <button
+        onClick={() => setUseLocalAI(!useLocalAI)}
+        className={`p-2 rounded-full transition-all flex items-center gap-1 ${useLocalAI ? 'bg-indigo-500 text-white shadow-sm' : 'text-slate-400 hover:text-indigo-500'}`}
+        title={useLocalAI ? 'Using Local AI Transcription (Private)' : 'Use Local AI Transcription'}
+      >
+        <Brain size={14} />
+        {useLocalAI && <span className="text-[10px] font-bold pr-1">{workerStatus === 'loading' ? 'Load...' : 'Local'}</span>}
       </button>
     </div>
   );

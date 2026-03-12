@@ -5,6 +5,7 @@ export interface PatientDemographics {
   gender?: string;
   history?: string;
   location?: string;
+  latLng?: { latitude: number; longitude: number };
   symptoms?: string;
   diagnosis?: string;
 }

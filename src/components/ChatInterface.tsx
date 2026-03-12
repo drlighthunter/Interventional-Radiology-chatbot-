@@ -1,13 +1,15 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, User, Bot, Loader2, Copy, Check, Paperclip, FileText, Plus, Trash2, ShieldCheck, Volume2 } from 'lucide-react';
+import { Send, User, Bot, Loader2, Copy, Check, Paperclip, FileText, Plus, Trash2, ShieldCheck, Volume2, Mail } from 'lucide-react';
 import Markdown from 'react-markdown';
 import { motion, AnimatePresence } from 'motion/react';
 import { Message, Language, PatientDemographics, Attachment } from '../types';
 import { getChatResponse, logAnalytics } from '../services/localChatService';
 import { VoiceHandler } from './VoiceHandler';
 import { PatientProfile } from './PatientProfile';
+import { useTTS } from '../services/ttsService';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import emailjs from '@emailjs/browser';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -49,6 +51,8 @@ export const ChatInterface: React.FC = () => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const tts = useTTS(language);
+
   const languages: { code: Language; name: string }[] = [
     { code: 'en', name: 'English' },
     { code: 'hi', name: 'Hindi (à¤¹à¤¿à¤¨à¥à¤¦à¥€)' },
@@ -56,7 +60,7 @@ export const ChatInterface: React.FC = () => {
     { code: 'ta', name: 'Tamil (à®¤à®®à®¿à®´à¯)' },
     { code: 'te', name: 'Telugu (à°¤à±†à°²à±à°—à±)' },
     { code: 'ml', name: 'Malayalam (à´®à´²à´¯à´¾à´³à´‚)' },
-    { code: 'or', name: 'Oriya (à¬à¬¡à¬¼à¬¿à¬)' },
+    { code: 'or', name: 'Oriya (à¬“à¬¡à¬¼à¬¿à¬†)' },
     { code: 'bn', name: 'Bangla (à¦¬à¦¾à¦à¦²à¦¾)' },
     { code: 'mr', name: 'Marathi (à¤®à¤°à¤¾à¤ à¥€)' },
     { code: 'gu', name: 'Gujarati (àª—à«àªàª°àª¾àª¤à«€)' },
@@ -67,6 +71,25 @@ export const ChatInterface: React.FC = () => {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages]);
+
+  useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setDemographics(prev => ({
+            ...prev,
+            latLng: {
+              latitude: position.coords.latitude,
+              longitude: position.coords.longitude
+            }
+          }));
+        },
+        (error) => {
+          console.error("Error getting location:", error);
+        }
+      );
+    }
+  }, []);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -94,6 +117,19 @@ export const ChatInterface: React.FC = () => {
     const currentAttachments = overrideAttachments || attachments;
     if ((!text.trim() && currentAttachments.length === 0) || isLoading) return;
 
+    // Unlock audio context on user interaction
+    if (tts.speechEnabled) {
+      if (tts.useNaturalVoice) {
+        const audio = new Audio("data:audio/mp3;base64,//NExAAAAANIAAAAAExBTUUzLjEwMKqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq");
+        audio.volume = 0;
+        audio.play().catch(() => {});
+      } else if (window.speechSynthesis) {
+        const utterance = new SpeechSynthesisUtterance('');
+        utterance.volume = 0;
+        window.speechSynthesis.speak(utterance);
+      }
+    }
+
     const userMessage: Message = { 
       role: 'user', 
       text,
@@ -109,6 +145,9 @@ export const ChatInterface: React.FC = () => {
       const response = await getChatResponse(newMessages, language, demographics);
       const botMessage: Message = { role: 'model', text: response || 'Sorry, I could not process that.' };
       setMessages(prev => [...prev, botMessage]);
+
+      // Speak the response
+      tts.speak(botMessage.text);
 
       // Log analytics
       logAnalytics({
@@ -130,6 +169,35 @@ export const ChatInterface: React.FC = () => {
     handleSend(prompt);
   };
 
+  const emailTranscript = async () => {
+    if (messages.length === 0) return;
+    
+    // Note: To make this work in production, you need to sign up at emailjs.com
+    // and replace these with your actual Service ID, Template ID, and Public Key.
+    const SERVICE_ID = 'YOUR_SERVICE_ID';
+    const TEMPLATE_ID = 'YOUR_TEMPLATE_ID';
+    const PUBLIC_KEY = 'YOUR_PUBLIC_KEY';
+
+    if (SERVICE_ID === 'YOUR_SERVICE_ID') {
+      alert("EmailJS is integrated but needs configuration! Please add your Service ID, Template ID, and Public Key in ChatInterface.tsx to enable email sending.");
+      return;
+    }
+
+    const transcript = messages.map(m => `${m.role === 'user' ? 'Patient' : 'AI Assistant'}: ${m.text}`).join('\n\n');
+    
+    try {
+      await emailjs.send(SERVICE_ID, TEMPLATE_ID, {
+        to_email: 'patient@example.com', // You can prompt the user for their email
+        message: transcript,
+        reply_to: 'noreply@irchatbot.com',
+      }, PUBLIC_KEY);
+      alert('Transcript emailed successfully!');
+    } catch (error) {
+      console.error('Failed to send email:', error);
+      alert('Failed to send email. Please check console for details.');
+    }
+  };
+
   return (
     <div className="flex flex-col h-screen max-w-4xl mx-auto bg-white shadow-2xl overflow-hidden">
       {/* Header */}
@@ -141,13 +209,35 @@ export const ChatInterface: React.FC = () => {
           <div>
             <h1 className="font-bold text-lg leading-tight">IR Patient Guide</h1>
             <div className="flex items-center gap-2">
-              <p className="text-xs text-slate-400">Local Assistant (Offline)</p>
-              <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded border border-emerald-500/30 font-medium">Self-Contained</span>
+              <p className="text-xs text-slate-400">AI Medical Assistant</p>
+              <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded border border-emerald-500/30 font-medium">Patient Friendly</span>
             </div>
           </div>
         </div>
         
         <div className="flex items-center gap-4">
+          {messages.length > 0 && (
+            <>
+              <button
+                onClick={emailTranscript}
+                className="text-xs text-slate-400 hover:text-emerald-400 transition-colors flex items-center gap-1"
+                title="Email Transcript"
+              >
+                <Mail size={14} />
+                <span className="hidden sm:inline">Email</span>
+              </button>
+              <button
+                onClick={() => {
+                  setMessages([]);
+                  tts.stop();
+                }}
+                className="text-xs text-slate-400 hover:text-white transition-colors"
+                title="Clear Chat"
+              >
+                Clear Chat
+              </button>
+            </>
+          )}
           <button
             onClick={() => setShowProfile(!showProfile)}
             className={cn(
@@ -192,7 +282,7 @@ export const ChatInterface: React.FC = () => {
                 "What is an angioplasty?",
                 "Pre-op for angiography",
                 "I have leg pain when walking",
-                "Post-op care for embolization"
+                "Find nearby IR providers"
               ].map((suggestion) => (
                 <button
                   key={suggestion}
@@ -247,21 +337,20 @@ export const ChatInterface: React.FC = () => {
                   </div>
                 )}
                 <div className="prose prose-sm max-w-none prose-p:leading-relaxed prose-pre:bg-slate-800 prose-pre:text-slate-100">
-                  <Markdown>{msg.text}</Markdown>
+                  <Markdown
+                    components={{
+                      a: ({ node, ...props }) => (
+                        <a target="_blank" rel="noopener noreferrer" className="text-emerald-600 hover:underline" {...props} />
+                      )
+                    }}
+                  >
+                    {msg.text}
+                  </Markdown>
                 </div>
                 {msg.role === 'model' && (
                   <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
                     <button
-                      onClick={() => {
-                        const voiceHandler = document.querySelector('[title="Mute Voice Output"], [title="Enable Voice Output"]');
-                        // This is a bit hacky, but since VoiceHandler is a separate component, 
-                        // we can trigger a re-read by just calling the speak function if we had access to it.
-                        // For now, let's just use the local speak as a quick way to re-read.
-                        const utterance = new SpeechSynthesisUtterance(msg.text.replace(/[#*`]/g, ''));
-                        utterance.lang = language === 'en' ? 'en-US' : language + '-IN';
-                        window.speechSynthesis.cancel();
-                        window.speechSynthesis.speak(utterance);
-                      }}
+                      onClick={() => tts.speak(msg.text, true)}
                       className="p-1.5 text-slate-400 hover:text-emerald-500 hover:bg-emerald-50 rounded-md transition-colors"
                       title="Read aloud"
                     >
@@ -319,7 +408,12 @@ export const ChatInterface: React.FC = () => {
             <VoiceHandler 
               language={language} 
               onSpeechEnd={handleSend} 
-              lastResponse={messages[messages.length - 1]?.role === 'model' ? messages[messages.length - 1].text : undefined}
+              speechEnabled={tts.speechEnabled}
+              setSpeechEnabled={tts.setSpeechEnabled}
+              useNaturalVoice={tts.useNaturalVoice}
+              setUseNaturalVoice={tts.setUseNaturalVoice}
+              isSpeaking={tts.isSpeaking}
+              stopSpeech={tts.stop}
             />
             <span className="text-[10px] text-slate-400">Speak your query or type below</span>
           </div>
@@ -362,7 +456,7 @@ export const ChatInterface: React.FC = () => {
           />
           <button
             type="submit"
-            disabled={!input.trim() || isLoading}
+            disabled={(!input.trim() && attachments.length === 0) || isLoading}
             className="bg-emerald-600 text-white p-3 rounded-xl hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             <Send size={20} />
