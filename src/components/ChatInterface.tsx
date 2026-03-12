@@ -31,7 +31,7 @@ const CopyButton: React.FC<{ text: string }> = ({ text }) => {
   return (
     <button
       onClick={handleCopy}
-      className="p-1.5 text-slate-400 hover:text-emerald-500 hover:bg-emerald-50 rounded-md transition-colors"
+      className="p-1.5 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-md transition-colors"
       title="Copy response"
     >
       {copied ? <Check size={14} /> : <Copy size={14} />}
@@ -251,10 +251,10 @@ export const ChatInterface: React.FC = () => {
           <select
             value={language}
             onChange={(e) => setLanguage(e.target.value as Language)}
-            className="bg-slate-100 text-slate-700 text-sm border-none rounded px-2 py-1 focus:ring-2 focus:ring-sky-500"
+            className="bg-slate-100 text-slate-700 text-sm font-sans border-none rounded px-2 py-1 focus:ring-2 focus:ring-sky-500"
           >
             {languages.map(lang => (
-              <option key={lang.code} value={lang.code}>{lang.name}</option>
+              <option key={lang.code} value={lang.code} className="font-sans">{lang.name}</option>
             ))}
           </select>
         </div>
