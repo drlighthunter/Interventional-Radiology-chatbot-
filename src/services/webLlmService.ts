@@ -1,9 +1,10 @@
-import { CreateMLCEngine, InitProgressReport, MLCEngine } from "@mlc-ai/web-llm";
+// @ts-ignore
+import { CreateMLCEngine, InitProgressReport, MLCEngine } from "@mlc-ai/web-llm?v=4";
 import { Message, Language, PatientDemographics } from "../types";
 
 let engine: MLCEngine | null = null;
-// Using a small, fast model suitable for browser execution
-const MODEL_ID = "gemma-2b-it-q4f32_1-MLC"; 
+// Using TinyLlama (1.1B parameters, 16-bit floats, 1k context) to minimize VRAM usage (~675MB) for budget smartphones
+const MODEL_ID = "TinyLlama-1.1B-Chat-v1.0-q4f16_1-MLC-1k"; 
 
 export async function initLocalModel(
   onProgress: (progress: InitProgressReport) => void
@@ -34,7 +35,7 @@ export async function getLocalChatResponse(
 Your goal is to educate patients about minimally invasive IR procedures in simple, easy-to-understand language.
 Current User Language: ${language}
 ${demographics ? `Patient Context: Age: ${demographics.age || 'Unknown'}, Gender: ${demographics.gender || 'Unknown'}, History: ${demographics.history || 'Unknown'}` : ''}
-Please respond directly to the user's query in their language.`;
+Please respond directly to the user's query in their language. Keep responses concise.`;
 
   const formattedMessages = [
     { role: "system" as const, content: systemPrompt },
@@ -48,6 +49,7 @@ Please respond directly to the user's query in their language.`;
     const reply = await engine.chat.completions.create({
       messages: formattedMessages,
       temperature: 0.7,
+      max_tokens: 512,
     });
 
     return reply.choices[0].message.content || "I'm sorry, I couldn't generate a response.";

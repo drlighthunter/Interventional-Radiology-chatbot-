@@ -1,9 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, User, Bot, Loader2, Copy, Check, Paperclip, FileText, Plus, Trash2, ShieldCheck, Volume2, Mail, Cpu } from 'lucide-react';
+import { Send, User, Bot, Loader2, Copy, Check, Paperclip, FileText, Plus, Trash2, ShieldCheck, Volume2, Mail, Cpu, Smartphone } from 'lucide-react';
 import Markdown from 'react-markdown';
 import { motion, AnimatePresence } from 'motion/react';
 import { Message, Language, PatientDemographics, Attachment } from '../types';
-import { getChatResponse, logAnalytics } from '../services/localChatService';
 import { initLocalModel, getLocalChatResponse } from '../services/webLlmService';
 import { VoiceHandler } from './VoiceHandler';
 import { PatientProfile } from './PatientProfile';
@@ -45,7 +44,6 @@ export const ChatInterface: React.FC = () => {
   const [input, setInput] = useState('');
   const [language, setLanguage] = useState<Language>('en');
   const [isLoading, setIsLoading] = useState(false);
-  const [userId] = useState(() => Math.random().toString(36).substring(7));
   const [demographics, setDemographics] = useState<PatientDemographics>({});
   const [showProfile, setShowProfile] = useState(false);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -53,9 +51,9 @@ export const ChatInterface: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Local AI State
-  const [isLocalMode, setIsLocalMode] = useState(false);
-  const [localModelLoading, setLocalModelLoading] = useState(false);
-  const [localModelProgress, setLocalModelProgress] = useState('');
+  const [isModelReady, setIsModelReady] = useState(false);
+  const [modelLoading, setModelLoading] = useState(false);
+  const [modelProgress, setModelProgress] = useState('');
 
   const tts = useTTS(language);
 
@@ -71,6 +69,14 @@ export const ChatInterface: React.FC = () => {
     { code: 'mr', name: 'Marathi (मराठी)' },
     { code: 'gu', name: 'Gujarati (ગુજરાતી)' },
   ];
+
+  useEffect(() => {
+    const version = 'v4';
+    if (localStorage.getItem('appVersion') !== version) {
+      localStorage.setItem('appVersion', version);
+      window.location.reload();
+    }
+  }, []);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -97,24 +103,23 @@ export const ChatInterface: React.FC = () => {
     }
   }, []);
 
-  const toggleLocalMode = async () => {
-    if (!isLocalMode) {
-      setLocalModelLoading(true);
-      setLocalModelProgress('Initializing local model...');
-      try {
-        await initLocalModel((progress) => {
-          setLocalModelProgress(progress.text);
-        });
-        setIsLocalMode(true);
-      } catch (error) {
-        console.error("Failed to load local model:", error);
-        alert("Failed to load local AI model. Your browser might not support WebGPU or you might not have enough memory.");
-      } finally {
-        setLocalModelLoading(false);
-        setLocalModelProgress('');
-      }
-    } else {
-      setIsLocalMode(false);
+  const initializeModel = async () => {
+    if (isModelReady) return true;
+    setModelLoading(true);
+    setModelProgress('Initializing local AI model (downloading ~600MB once)...');
+    try {
+      await initLocalModel((progress) => {
+        setModelProgress(progress.text);
+      });
+      setIsModelReady(true);
+      return true;
+    } catch (error) {
+      console.error("Failed to load local model:", error);
+      alert("Failed to load local AI model. Your device might not support WebGPU or have enough memory.");
+      return false;
+    } finally {
+      setModelLoading(false);
+      setModelProgress('');
     }
   };
 
@@ -169,12 +174,15 @@ export const ChatInterface: React.FC = () => {
     setIsLoading(true);
 
     try {
-      let response = '';
-      if (isLocalMode) {
-        response = await getLocalChatResponse(newMessages, language, demographics);
-      } else {
-        response = await getChatResponse(newMessages, language, demographics);
+      if (!isModelReady) {
+        const ready = await initializeModel();
+        if (!ready) {
+          setIsLoading(false);
+          return;
+        }
       }
+
+      const response = await getLocalChatResponse(newMessages, language, demographics);
       
       const botMessage: Message = { role: 'model', text: response || 'Sorry, I could not process that.' };
       setMessages(prev => [...prev, botMessage]);
@@ -182,14 +190,6 @@ export const ChatInterface: React.FC = () => {
       // Speak the response
       tts.speak(botMessage.text);
 
-      // Log analytics
-      logAnalytics({
-        userId,
-        language,
-        rawMessage: text,
-        demographics,
-        isLocalMode
-      });
     } catch (error) {
       console.error(error);
       setMessages(prev => [...prev, { role: 'model', text: 'An error occurred. Please try again.' }]);
@@ -250,23 +250,17 @@ export const ChatInterface: React.FC = () => {
         </div>
         
         <div className="flex items-center gap-4">
-          <button
-            onClick={toggleLocalMode}
-            disabled={localModelLoading}
-            className={cn(
-              "flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-medium transition-colors border",
-              isLocalMode 
-                ? "bg-emerald-50 text-emerald-700 border-emerald-200" 
-                : "bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100",
-              localModelLoading && "opacity-50 cursor-not-allowed"
-            )}
-            title="Run AI locally on your device (Private & Free)"
-          >
-            {localModelLoading ? <Loader2 size={14} className="animate-spin" /> : <Cpu size={14} />}
+          <div className={cn(
+            "flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-medium border",
+            isModelReady 
+              ? "bg-emerald-50 text-emerald-700 border-emerald-200" 
+              : "bg-amber-50 text-amber-700 border-amber-200"
+          )}>
+            <Smartphone size={14} />
             <span className="hidden sm:inline">
-              {localModelLoading ? 'Loading...' : isLocalMode ? 'Local AI Active' : 'Use Local AI'}
+              {isModelReady ? '100% Local AI Ready' : '100% Local AI (Offline)'}
             </span>
-          </button>
+          </div>
           
           {messages.length > 0 && (
             <>
@@ -320,11 +314,11 @@ export const ChatInterface: React.FC = () => {
         />
       )}
 
-      {localModelProgress && (
-        <div className="bg-emerald-50 border-b border-emerald-100 px-4 py-2 text-xs text-emerald-700 flex items-center justify-between">
+      {modelProgress && (
+        <div className="bg-amber-50 border-b border-amber-100 px-4 py-2 text-xs text-amber-700 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Loader2 size={14} className="animate-spin" />
-            <span>{localModelProgress}</span>
+            <span className="font-mono">{modelProgress}</span>
           </div>
         </div>
       )}
@@ -340,10 +334,11 @@ export const ChatInterface: React.FC = () => {
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full max-w-lg">
               {[
-                "What is an angioplasty?",
-                "Pre-op for angiography",
-                "I have leg pain when walking",
-                "Find nearby IR providers"
+                "I need a biopsy for a lump, what should I expect?",
+                "My legs feel heavy and I have varicose veins",
+                "I have frequent urination due to BPH",
+                "I have heavy bleeding and pain from fibroids",
+                "How is internal bleeding treated without surgery?"
               ].map((suggestion) => (
                 <button
                   key={suggestion}

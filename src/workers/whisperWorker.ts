@@ -1,4 +1,5 @@
-import { pipeline, env } from '@huggingface/transformers';
+// @ts-ignore
+import { pipeline, env } from '@huggingface/transformers?v=2';
 
 // Disable local models, use browser cache
 env.allowLocalModels = false;

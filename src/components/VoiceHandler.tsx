@@ -31,7 +31,7 @@ export const VoiceHandler: React.FC<VoiceHandlerProps> = ({
 
   useEffect(() => {
     if (useLocalAI && !workerRef.current) {
-      workerRef.current = new Worker(new URL('../workers/whisperWorker.ts', import.meta.url), { type: 'module' });
+      workerRef.current = new Worker(new URL('../workers/whisperWorker.ts?v=2', import.meta.url), { type: 'module' });
       workerRef.current.onmessage = (e) => {
         setWorkerStatus(e.data.status);
         if (e.data.status === 'complete') {
