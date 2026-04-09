@@ -4,7 +4,7 @@ COPY package*.json ./
 COPY patch-*.cjs ./
 RUN npm install
 COPY . .
-RUN npm run build || echo "No build script"
+RUN npm run build
 EXPOSE 7860
 ENV NODE_ENV=production
 CMD ["npm", "start"]
